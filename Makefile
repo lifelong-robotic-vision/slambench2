@@ -319,13 +319,25 @@ datasetslist:
 ####################################
 
 
+#### OpenLORIS     
+###############
+
+./datasets/OpenLORIS/%.slam : ./datasets/OpenLORIS/%
+	if [ ! -e ./build/bin/dataset-generator ] ; then make slambench ; fi
+	./build/bin/dataset-generator -d OpenLORIS -i $</ -o $@
+
+OpenLORIS-%: 
+	$(eval subdir=$(shell find ./datasets/OpenLORIS/$*/ -maxdepth 1 -mindepth 1 -type d))
+	for dir in `echo $(subdir)` ; do\
+        $(MAKE) "$$dir".slam; \
+        done
+	echo "success"
+
+.SECONDARY: $(OBJS)
+
 
 #### EuRoCMAV
 ###############
-LifelongSLAM : # make ~ useless
-	
-	@echo "success"
-
 
 ./datasets/EuRoCMAV/%.zip :  # Example : $* = machine_hall/MH_01_easy/MH_01_easy
 	mkdir -p $(@D)

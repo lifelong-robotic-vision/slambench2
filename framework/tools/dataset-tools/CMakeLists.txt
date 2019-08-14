@@ -28,9 +28,9 @@ if (Boost_FOUND)
 	target_link_libraries(SVO slambench-io ${Boost_LIBRARIES})
 	target_include_directories(SVO PRIVATE ${Boost_INCLUDE_DIRS})
 
-	add_library(LifelongSLAM LifelongSLAM.cpp)
-	target_link_libraries(LifelongSLAM slambench-io ${Boost_LIBRARIES})
-	target_include_directories(LifelongSLAM PRIVATE ${Boost_INCLUDE_DIRS})
+	add_library(OpenLORIS OpenLORIS.cpp)
+	target_link_libraries(OpenLORIS slambench-io ${Boost_LIBRARIES})
+	target_include_directories(OpenLORIS PRIVATE ${Boost_INCLUDE_DIRS})
 	
 	
 	add_library(ICL ICL.cpp)
@@ -47,7 +47,7 @@ if (Boost_FOUND)
 	target_include_directories(ICLNUIM PRIVATE ${Boost_INCLUDE_DIRS})
     
 	add_executable(dataset-generator dataset-generator.cpp)
-	target_link_libraries(dataset-generator TUM ICLNUIM ICL EUROCMAV SVO LifelongSLAM)
+	target_link_libraries(dataset-generator TUM ICLNUIM ICL EUROCMAV SVO OpenLORIS)
 		
 	
 else (Boost_FOUND)

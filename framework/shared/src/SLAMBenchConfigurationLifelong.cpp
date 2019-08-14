@@ -48,11 +48,11 @@
 #define LOAD_FUNC2HELPER(handle,lib,f)     *(void**)(& lib->f) = dlsym(handle,#f); const char *dlsym_error_##lib##f = dlerror(); if (dlsym_error_##lib##f) {std::cerr << "Cannot load symbol " << #f << dlsym_error_##lib##f << std::endl; dlclose(handle); exit(1);}
 
 
-bool sb_relocalize_default(SLAMBenchLibraryHelper*, slambench::io::SLAMFrame*)
-{
-    std::cout << "Assumed successful relocalization by default!" << std::endl;
-    return true;
-}
+// bool sb_relocalize_default(SLAMBenchLibraryHelper*)
+// {
+//     std::cout << "Assumed successful relocalization by default!" << std::endl;
+//     return true;
+// }
 
 //TODO: (Mihai) too much duplicated code here. One option is to move LOAD_FUNC2HELPER into the SLAMBenchConfiguration header
 // Need to figure out how to avoid rewriting the whole thing without breaking SLAMBenchConfiguration
@@ -84,11 +84,11 @@ void SLAMBenchConfigurationLifelong::add_slam_library(std::string so_file, std::
     LOAD_FUNC2HELPER(handle,lib_ptr,c_sb_clean_slam_system);
     LOAD_FUNC2HELPER(handle,lib_ptr,c_sb_update_outputs);
     // workaround to be compatible with benchmarks that does not implement the relocalize API
-    if (dlsym(handle, "_Z13sb_relocalizeP22SLAMBenchLibraryHelperPN9slambench2io9SLAMFrameE")) {
+    if (dlsym(handle, "_Z13sb_relocalizeP22SLAMBenchLibraryHelper")) {
         LOAD_FUNC2HELPER(handle,lib_ptr,c_sb_relocalize);
     } else {
         std::cout << "Benchmark does not implement sb_relocalize(). Will use the default." << std::endl;
-        lib_ptr->c_sb_relocalize = &sb_relocalize_default;
+        lib_ptr->c_sb_relocalize = lib_ptr->c_sb_process_once;
     }
     this->slam_libs.push_back(lib_ptr);
 
@@ -167,8 +167,7 @@ void SLAMBenchConfigurationLifelong::InitGroundtruth(bool with_point_cloud) {
 
     if(initialised_) {
         // return;
-        auto gt_trajectory = GetGroundTruth().GetMainOutput(slambench::values::VT_POSE);
-        std::cout<<"gt_traj in initGT before:"<<gt_trajectory<<std::endl;
+        // auto gt_trajectory = GetGroundTruth().GetMainOutput(slambench::values::VT_POSE);
     }
     auto interface = GetCurrentInputInterface();
     if(interface != nullptr) {
@@ -186,7 +185,6 @@ void SLAMBenchConfigurationLifelong::InitGroundtruth(bool with_point_cloud) {
     }
 
     auto gt_trajectory = GetGroundTruth().GetMainOutput(slambench::values::VT_POSE);
-    std::cout<<"gt_traj in initGT after:"<<gt_trajectory<<std::endl;
     if(gt_trajectory == nullptr) {
         // Warn if there is no ground truth
         std::cerr << "Dataset does not provide a GT trajectory" << std::endl;
@@ -239,32 +237,75 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
         while(current_frame!= nullptr)
         {
             
-        if (current_frame->FrameSensor->GetType()!= slambench::io::GroundTruthSensor::kGroundTruthTrajectoryType) {
+            if (current_frame->FrameSensor->GetType()!= slambench::io::GroundTruthSensor::kGroundTruthTrajectoryType) {
             // ********* [[ NEW FRAME PROCESSED BY ALGO ]] *********
 
             for (auto lib : config_lifelong->slam_libs) {
-
+                frame_count++;
 
                 // ********* [[ SEND THE FRAME ]] *********
                 ongoing=not lib->c_sb_update_frame(lib,current_frame);
 
                 // This algorithm hasn't received enough frames yet.
                 if(ongoing) {
-                    // std::cout<<"no enough frame."<<std::endl;
                     continue;
                 }
 
                 // ********* [[ PROCESS ALGO START ]] *********
                 lib->GetMetricManager().BeginFrame();
 
+                slambench::TimeStamp ts = current_frame->Timestamp;
 
+                if (!config_lifelong->input_interface_updated) {
+                    if (not lib->c_sb_process_once (lib)) {
+                        std::cerr <<"Error after lib->c_sb_process_once." << std::endl;
+                        exit(1);
+                    }
+                } else {
+                    // ********** [[or relocalization]] **********
+                    //Mihai: need assertion / safety mechanism to avoid ugly errors
+                    bool res = dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->c_sb_relocalize(lib);
+                    config_lifelong->input_interface_updated = false;
+                    //Save the result
+                    if (config_lifelong->output_filename_ != "" ) {
+                        std::ofstream OutFile;
+                        OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
+   		                OutFile << "#Relocalization result:"<<res<<std::endl;
+                        OutFile.close();
+                    }
+                    // Mihai: Might want to add a reset function to feed the pose?
+                    if(!res)
+                    {
+                        //Find the nearest one
+                        auto gt_frames = dynamic_cast<slambench::io::GTBufferingFrameStream*>(config_lifelong->input_stream_)->GetGTFrames();
+                        int index = 0;
+                        auto gt_frame = gt_frames->GetFrame(index);
+                        slambench::TimeStamp gt_ts = gt_frame->Timestamp;
+                        while (gt_frame) {
+                            if(gt_ts > ts) {
+                                break;
+                            }
+                            index++;
+                            gt_frame = gt_frames->GetFrame(index);
+                            gt_ts = gt_frame->Timestamp;
+                        }
+                        Eigen::Matrix4f &t = libs_trans[lib];
+                        Eigen::Matrix4f gt;
+                        memcpy(gt.data(), gt_frame->GetData(), gt_frame->GetSize());
+                        dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
+                        Eigen::Matrix4f es = t.inverse() * gt;
+                        memcpy(gt_frame->GetData(), es.data(), gt_frame->GetSize());
+                        dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
 
-                if (not lib->c_sb_process_once (lib)) {
-                    std::cerr <<"Error after lib->c_sb_process_once." << std::endl;
-                    exit(1);
+                        lib->c_sb_update_frame(lib, gt_frame);// groundtruth feed
+
+                        dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
+                        memcpy(gt_frame->GetData(), gt.data(), gt_frame->GetSize());
+                        dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
+                    }
                 }
 
-                slambench::TimeStamp ts = current_frame->Timestamp;
+                
                 if(!lib->c_sb_update_outputs(lib, &ts)) {
                     std::cerr << "Failed to get outputs" << std::endl;
                     exit(1);
@@ -286,7 +327,7 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                     }
                 }
             }
-        }
+            }
             // we're done with the frame
             current_frame->FreeData();
             current_frame = config_lifelong->input_stream_->GetNextFrame();
@@ -295,38 +336,6 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
         // Load next bag if it exists
         config_lifelong->LoadNextInputInterface();
         interface = config_lifelong->GetCurrentInputInterface();
-        // Mihai: a bit redundant, could be done nicer
-        if(interface == nullptr)
-        {
-            std::cerr << "Last bag processed." << std::endl;
-            break;
-        }
-
-        for (auto lib : config_lifelong->slam_libs) {
-            lib->updateInputInterface(interface);
-            current_frame = config_lifelong->input_stream_->GetNextFrame();
-            //Mihai: need assertion / safety mechanism to avoid ugly errors
-            bool res = dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->c_sb_relocalize(lib, current_frame);
-
-            // Mihai: Might want to add a reset function to feed the pose?
-            if(!res)
-            {
-                auto gt_frame = dynamic_cast<slambench::io::GTBufferingFrameStream*>(config_lifelong->input_stream_)->GetGTFrames()->GetFrame(0);
-                Eigen::Matrix4f &t = libs_trans[lib];
-                Eigen::Matrix4f gt;
-                memcpy(gt.data(), gt_frame->GetData(), gt_frame->GetSize());
-                dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
-                Eigen::Matrix4f es = t.inverse() * gt;
-                memcpy(gt_frame->GetData(), es.data(), gt_frame->GetSize());
-                dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
-
-                lib->c_sb_update_frame(lib, gt_frame);
-                std::cout<<"********** feed pose. **********"<<std::endl;
-
-                dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
-                memcpy(gt_frame->GetData(), gt.data(), gt_frame->GetSize());
-            }
-        }
         bags_count++;
         frame_count = 0;
     }
@@ -351,6 +360,14 @@ const slambench::io::SensorCollection& SLAMBenchConfigurationLifelong::GetSensor
 
 
 void SLAMBenchConfigurationLifelong::AddInputInterface(slambench::io::InputInterface *input_ref) {
+    //workaround to be compatible with benchmarks that does not implement sensors resetting.
+    //assume different input_interfaces has exactly the same types of sensors.
+    //If sensors are different, may introduce problems.
+    if (input_interfaces.empty()) {
+        first_sensors = &input_ref->GetSensors();
+    } else {
+        input_ref->GetSensors() = *first_sensors;
+    }
     input_interfaces.push_back(input_ref);
 }
 
@@ -370,9 +387,10 @@ void SLAMBenchConfigurationLifelong::LoadNextInputInterface() {
     InitGroundtruth();
     init_cw();
     for (auto lib : this->slam_libs) {
-        dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->resetInputInterface(this->GetCurrentInputInterface());
+        lib->updateInputInterface(this->GetCurrentInputInterface());
         dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->resetSensorUpdate(true);
     }
+    input_interface_updated = true;
 }
 
 void SLAMBenchConfigurationLifelong::init_cw() {
@@ -488,11 +506,11 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
     }
 	float x, y, z;
 	Eigen::Matrix3d R;
-	struct timeval tv;
+	//struct timeval tv;
 	for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
 	    std::ofstream OutFile;
-		OutFile.open(lib->get_library_name() + "_" + this->output_filename_, std::ios::app);
-   		OutFile << "#DatasetTimestamp, ProcessTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;	
+		OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
+   		OutFile << "#DatasetTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;	
 		auto output = lib->GetOutputManager().GetOutput("Pose")->GetValues();
 		for (auto it = output.begin(); it != output.end(); ++it ) {
 			for (int i = 0; i < 3; i++) {
@@ -505,9 +523,10 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
 			x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
 			y = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(1, 3);
 			z = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(2, 3);
-			gettimeofday(&tv,NULL); 
-			OutFile<<it->first<<" "<<tv.tv_sec<<"."<<tv.tv_usec<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
+			//gettimeofday(&tv,NULL); 
+			OutFile<<it->first<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
 		}
 		OutFile.close();
 	}
 }
+

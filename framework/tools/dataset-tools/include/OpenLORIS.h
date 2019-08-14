@@ -1,7 +1,7 @@
 //Copyright(c) 2019 Intel Corporation.
 
-#ifndef FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_LIFELONGSLAM_H_
-#define FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_LIFELONGSLAM_H_
+#ifndef FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_OPENLORIS_H_
+#define FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_OPENLORIS_H_
 
 
 #include <ParameterManager.h>
@@ -27,16 +27,16 @@ namespace io {
 
     Eigen::Matrix4f compute_trans_matrix(std::string input_name_1, std::string input_name_2, std::string filename);
 
-class LifelongSLAMReader :  public DatasetReader {
+class OpenLORISReader :  public DatasetReader {
 
 public :
 	std::string input;
 	bool color = true, grey = true, depth = true, aligned_depth = true, fisheye1 = true, fisheye2 = true,
 	 d400_accel = true, d400_gyro = true, t265_accel = true, t265_gyro = true, odom = true, gt = true;
 
-	LifelongSLAMReader(std::string name) : DatasetReader(name) { 
+	OpenLORISReader(std::string name) : DatasetReader(name) { 
 
-		this->addParameter(TypedParameter<std::string>("i",     "input-directory",       "path of the LifelongSLAM dataset directory",   &this->input, NULL));
+		this->addParameter(TypedParameter<std::string>("i",     "input-directory",       "path of the OpenLORIS dataset directory",   &this->input, NULL));
 		this->addParameter(TypedParameter<bool>("grey",     "grey",       "set to true or false to specify if the GREY stream need to be include in the slam file.",   &this->grey, NULL));
 		this->addParameter(TypedParameter<bool>("color",     "color",       "set to true or false to specify if the RGB stream need to be include in the slam file.",   &this->color, NULL));
 		this->addParameter(TypedParameter<bool>("depth",     "depth",       "set to true or false to specify if the DEPTH stream need to be include in the slam file.",   &this->depth, NULL));
@@ -62,4 +62,4 @@ public :
 
 
 
-#endif /* FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_LIFELONGSLAM_H_ */
+#endif /* FRAMEWORK_TOOLS_DATASET_TOOLS_INCLUDE_OPENLORIS_H_ */

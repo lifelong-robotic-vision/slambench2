@@ -38,7 +38,7 @@
 #include "./include/ICLNUIM.h"
 #include "./include/TUM.h"
 #include "./include/SVO.h"
-#include "./include/LifelongSLAM.h"
+#include "./include/OpenLORIS.h"
 
 using namespace slambench::io;
 
@@ -95,8 +95,8 @@ public :
 			config->reader = new ICLReader("");
 		} else if (dataset_name == "svo") {
 			config->reader = new SVOReader("");
-		} else if (dataset_name == "LifelongSLAM") {
-			config->reader = new LifelongSLAMReader("");
+		} else if (dataset_name == "OpenLORIS") {
+			config->reader = new OpenLORISReader("");
 		}
 
 		if (config->reader) {
@@ -131,7 +131,7 @@ public :
 	MainComponent (int argc, char * argv[]) : ParameterComponent("") , binary_name(argv[0]) {
 		
 
-		this->addParameter(TypedParameter<std::string>("d",     "dataset",       "Name of the input dataset type (iclnuim, tum, eurocmav, icl, svo, LifelongSLAM)",   &this->dataset, NULL, this->dataset_callback));
+		this->addParameter(TypedParameter<std::string>("d",     "dataset",       "Name of the input dataset type (iclnuim, tum, eurocmav, icl, svo, OpenLORIS)",   &this->dataset, NULL, this->dataset_callback));
 		this->addParameter(TypedParameter<std::string>("o",     "log-file",      "Output slam file",            &this->output, NULL));
 		this->addParameter(TypedParameter<bool>       ("q",     "quiet",         "Hide the progress bar",            &this->quiet, NULL));
 		this->addParameter(TriggeredParameter         ("h",     "help",          "Print the help.",             this->help_callback));

@@ -28,7 +28,7 @@ class SLAMBenchLibraryHelperLifelong : public SLAMBenchLibraryHelper {
 
 
 public:
-    bool            (* c_sb_relocalize)(SLAMBenchLibraryHelper *, slambench::io::SLAMFrame * );
+    bool            (* c_sb_relocalize)(SLAMBenchLibraryHelper * );
 
 private:
     SLAMBenchLibraryHelperLifelong ();
@@ -46,9 +46,6 @@ public:
     }
     bool getSensorUpdate() {
         return sensor_update;
-    }
-    void resetInputInterface(slambench::io::InputInterface* input_interface) {
-        this->_input_interface = input_interface;
     }
 };
 

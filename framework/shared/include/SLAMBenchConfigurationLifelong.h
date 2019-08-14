@@ -45,9 +45,10 @@ private :
     
     bool cw_initialised_ = false;
     std::list<slambench::io::InputInterface*> input_interfaces;
+    slambench::io::SensorCollection* first_sensors;
 
 public :
-
+    bool input_interface_updated = false;
     std::string alignment_technique_ = "original";
     std::string output_filename_ = "";
     void init_cw();
