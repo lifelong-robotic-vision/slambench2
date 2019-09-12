@@ -143,8 +143,24 @@ void dataset_callback(Parameter* param, ParameterComponent* caller) {
 
     TypedParameter<std::vector<std::string>>* parameter =  dynamic_cast<TypedParameter<std::vector<std::string>>*>(param) ;
 
+    std::string input_name = parameter->getTypedValue()[0];
+    std::size_t found = input_name.find_last_of("/");
+    std::string scene = input_name.substr(found + 1, 20);
+    std::size_t found2 = scene.find("-");
+    std::size_t found3 = scene.find("-", found2 + 1);
+    scene = scene.substr(0, found3);
+
     for (std::string input_name : parameter->getTypedValue()) {
+        std::size_t found_ = input_name.find_last_of("/");
+        std::string scene_ = input_name.substr(found_ + 1, 20);
+        std::size_t found2_ = scene_.find("-");
+        std::size_t found3_ = scene_.find("-", found2_ + 1);
+        scene_ = scene_.substr(0, found3_);
+        if(scene_ != scene) {
+            throw std::logic_error("input sequences must be the same scene!");
+        }
         config->add_input(input_name);
+        config->input_filenames.push_back(input_name);
     }
     config->init_sensors();
 }
@@ -270,12 +286,18 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                     if (config_lifelong->output_filename_ != "" ) {
                         std::ofstream OutFile;
                         OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
-   		                OutFile << "#Relocalization result:"<<res<<std::endl;
+   		                OutFile << "reloc_result: "<<res<<std::endl;
                         OutFile.close();
                     }
                     // Mihai: Might want to add a reset function to feed the pose?
-                    if(!res)
+                    if(!res && config_lifelong->gt_available)
                     {
+                        if (config_lifelong->output_filename_ != "" ) {
+                            std::ofstream OutFile;
+                            OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
+   		                    OutFile << "aided_reloc: "<<1<<std::endl;
+                            OutFile.close();
+                        }
                         //Find the nearest one
                         auto gt_frames = dynamic_cast<slambench::io::GTBufferingFrameStream*>(config_lifelong->input_stream_)->GetGTFrames();
                         int index = 0;
@@ -312,7 +334,7 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                 }
 
                 lib->GetMetricManager().EndFrame();
-                if (libs_trans.count(lib) == 0) {
+                if (libs_trans.count(lib) == 0 && config_lifelong->gt_available) {
                     libs_trans[lib] = dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->alignment->getTransformation();
                 }
             }
@@ -446,6 +468,7 @@ void SLAMBenchConfigurationLifelong::init_cw() {
 		}
 
 		if (gt_traj) {
+            gt_available = true;
 			// Create an aligned trajectory
 			dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->alignment = new slambench::outputs::AlignmentOutput("Alignment", new slambench::outputs::PoseOutputTrajectoryInterface(gt_traj), lib_traj, alignment_method);
 			dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->alignment->SetActive(true);
@@ -463,7 +486,9 @@ void SLAMBenchConfigurationLifelong::init_cw() {
 			auto rpe_metric = new slambench::metrics::RPEMetric(new slambench::outputs::PoseOutputTrajectoryInterface(aligned), new slambench::outputs::PoseOutputTrajectoryInterface(gt_traj));
 			lib->GetMetricManager().AddFrameMetric(rpe_metric);
 			cw->AddColumn(new slambench::CollectionValueLibColumnInterface(lib, rpe_metric, lib->GetMetricManager().GetFramePhase()));
-		}
+		} else {
+            gt_available = false;
+        }
 		
         // Add a duration metric
 		lib->GetMetricManager().AddFrameMetric(duration_metric);
@@ -504,29 +529,56 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
     if (this->output_filename_ == "" ) {
         return;
     }
+    std::string input_name = this->input_filenames[this->count];
+    std::size_t found = input_name.find_last_of("/");
+    std::string scene = input_name.substr(found + 1, 20);
+    std::size_t found2 = scene.find("-");
+    std::size_t found3 = scene.find("-", found2 + 1);
+    std::string seq = scene.substr(found3 + 1, 1);
+    scene = scene.substr(0, found3);
+
+    if (this->count == 0) {
+        for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
+            std::ofstream OutFile;
+		    OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::out);
+            OutFile << "scene: " << scene << std::endl;
+            OutFile << "slam: " <<  lib->get_library_name() <<std::endl;
+            OutFile << "frame: " <<  " " << std::endl;
+            OutFile << "topic: " <<  " " << std::endl;
+            OutFile.close();
+        }
+    }
 	float x, y, z;
 	Eigen::Matrix3d R;
 	//struct timeval tv;
 	for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
 	    std::ofstream OutFile;
 		OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
+        OutFile << std::endl << "seq: " << seq <<std::endl;
    		OutFile << "#DatasetTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;	
 		auto output = lib->GetOutputManager().GetOutput("Pose")->GetValues();
-		for (auto it = output.begin(); it != output.end(); ++it ) {
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					R(i, j) = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(i, j);
-				}
-			}
-			Eigen::Quaterniond q = Eigen::Quaterniond(R);
-    		q.normalize();
-			x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
-			y = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(1, 3);
-			z = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(2, 3);
-			//gettimeofday(&tv,NULL); 
-			OutFile<<it->first<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
+        auto it = output.begin();
+        auto pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
+		for (; it != output.end(); ++it ) {
+            if (pose_previous != (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()||it == output.begin()){
+			    for (int i = 0; i < 3; i++) {
+				    for (int j = 0; j < 3; j++) {
+					    R(i, j) = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(i, j);
+				    }
+			    }
+			    Eigen::Quaterniond q = Eigen::Quaterniond(R);
+    		    q.normalize();
+			    x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
+			    y = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(1, 3);
+			    z = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(2, 3);
+			    //gettimeofday(&tv,NULL); 
+			    OutFile<<it->first<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
+                pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
+            }
 		}
+        OutFile<<std::endl;
 		OutFile.close();
 	}
+    this->count++;
 }
 

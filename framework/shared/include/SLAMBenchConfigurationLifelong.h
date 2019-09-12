@@ -46,11 +46,14 @@ private :
     bool cw_initialised_ = false;
     std::list<slambench::io::InputInterface*> input_interfaces;
     slambench::io::SensorCollection* first_sensors;
+    int count = 0;
+    bool gt_available;
 
 public :
     bool input_interface_updated = false;
     std::string alignment_technique_ = "original";
     std::string output_filename_ = "";
+    std::vector<std::string> input_filenames;
     void init_cw();
 	static void compute_loop_algorithm(SLAMBenchConfiguration* config, bool *stay_on, SLAMBenchUI *ui);
     void InitGroundtruth(bool with_point_cloud = true);
