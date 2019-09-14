@@ -324,6 +324,13 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                         dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
                         memcpy(gt_frame->GetData(), gt.data(), gt_frame->GetSize());
                         dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
+                    } else {
+                        if (config_lifelong->output_filename_ != "" ) {
+                            std::ofstream OutFile;
+                            OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
+   		                    OutFile << "aided_reloc: "<<0<<std::endl;
+                            OutFile.close();
+                        }
                     }
                 }
 
@@ -535,7 +542,7 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
     std::size_t found2 = scene.find("-");
     std::size_t found3 = scene.find("-", found2 + 1);
     std::string seq = scene.substr(found3 + 1, 1);
-    scene = scene.substr(0, found3);
+    scene = scene.substr(0, found2);
 
     if (this->count == 0) {
         for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
@@ -543,8 +550,8 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
 		    OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::out);
             OutFile << "scene: " << scene << std::endl;
             OutFile << "slam: " <<  lib->get_library_name() <<std::endl;
-            OutFile << "frame: " <<  " " << std::endl;
-            OutFile << "topic: " <<  " " << std::endl;
+            OutFile << "frame: " << std::endl;
+            OutFile << "topic: " << std::endl;
             OutFile.close();
         }
     }
@@ -561,16 +568,19 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
         auto pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
 		for (; it != output.end(); ++it ) {
             if (pose_previous != (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()||it == output.begin()){
-			    for (int i = 0; i < 3; i++) {
+			    x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
+                if (std::to_string(x) == "-nan") {
+                    continue;
+                }
+			    y = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(1, 3);
+			    z = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(2, 3);
+                for (int i = 0; i < 3; i++) {
 				    for (int j = 0; j < 3; j++) {
 					    R(i, j) = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(i, j);
 				    }
 			    }
 			    Eigen::Quaterniond q = Eigen::Quaterniond(R);
     		    q.normalize();
-			    x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
-			    y = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(1, 3);
-			    z = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(2, 3);
 			    //gettimeofday(&tv,NULL); 
 			    OutFile<<it->first<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
                 pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();

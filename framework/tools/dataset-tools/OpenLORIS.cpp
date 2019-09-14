@@ -233,8 +233,8 @@ bool loadOpenLORISDepthData(const std::string &dirname, const std::string &senso
 	depth_sensor->CopyPose(pose);
 
 	depth_sensor->Intrinsics[0] = f[sensor_name]["intrinsics"]["data"][0].as<float>() / depth_sensor->Width;
-	depth_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / depth_sensor->Height;
-	depth_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / depth_sensor->Width;
+	depth_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / depth_sensor->Height;
+	depth_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / depth_sensor->Width;
 	depth_sensor->Intrinsics[3] = f[sensor_name]["intrinsics"]["data"][3].as<float>() / depth_sensor->Height;
 
 	if (f[sensor_name]["distortion_model"].as<std::string>() == "radial-tangential") {
@@ -316,8 +316,8 @@ bool loadOpenLORISRGBData(const std::string &dirname, const std::string &sensor_
 	rgb_sensor->CopyPose(pose);
 
 	rgb_sensor->Intrinsics[0] = f[sensor_name]["intrinsics"]["data"][0].as<float>() / rgb_sensor->Width;
-	rgb_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / rgb_sensor->Height;
-	rgb_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / rgb_sensor->Width;
+	rgb_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / rgb_sensor->Height;
+	rgb_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / rgb_sensor->Width;
 	rgb_sensor->Intrinsics[3] = f[sensor_name]["intrinsics"]["data"][3].as<float>() / rgb_sensor->Height;
 
 	if (f[sensor_name]["distortion_model"].as<std::string>() == "radial-tangential") {
@@ -393,8 +393,8 @@ bool loadOpenLORISGreyData(const std::string &dirname, const std::string &sensor
 	grey_sensor->CopyPose(pose);
 
 	grey_sensor->Intrinsics[0] = f[sensor_name]["intrinsics"]["data"][0].as<float>() / grey_sensor->Width;
-	grey_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / grey_sensor->Height;
-	grey_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / grey_sensor->Width;
+	grey_sensor->Intrinsics[1] = f[sensor_name]["intrinsics"]["data"][2].as<float>() / grey_sensor->Height;
+	grey_sensor->Intrinsics[2] = f[sensor_name]["intrinsics"]["data"][1].as<float>() / grey_sensor->Width;
 	grey_sensor->Intrinsics[3] = f[sensor_name]["intrinsics"]["data"][3].as<float>() / grey_sensor->Height;
 
 	if (f[sensor_name]["distortion_model"].as<std::string>() == "radial-tangential") {
