@@ -48,9 +48,11 @@ private :
     slambench::io::SensorCollection* first_sensors;
     int count = 0;
     bool gt_available;
+    std::string gpuInfo;
 
 public :
     bool input_interface_updated = false;
+    bool aided_reloc = false;
     std::string alignment_technique_ = "original";
     std::string output_filename_ = "";
     std::vector<std::string> input_filenames;

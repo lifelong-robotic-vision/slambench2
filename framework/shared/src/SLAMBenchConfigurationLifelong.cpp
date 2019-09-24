@@ -42,7 +42,10 @@
 #include <iomanip>
 #include <map>
 
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+//#include <nvml.h>
 
 #include <dlfcn.h>
 #define LOAD_FUNC2HELPER(handle,lib,f)     *(void**)(& lib->f) = dlsym(handle,#f); const char *dlsym_error_##lib##f = dlerror(); if (dlsym_error_##lib##f) {std::cerr << "Cannot load symbol " << #f << dlsym_error_##lib##f << std::endl; dlclose(handle); exit(1);}
@@ -282,22 +285,10 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                     //Mihai: need assertion / safety mechanism to avoid ugly errors
                     bool res = dynamic_cast<SLAMBenchLibraryHelperLifelong*>(lib)->c_sb_relocalize(lib);
                     config_lifelong->input_interface_updated = false;
-                    //Save the result
-                    if (config_lifelong->output_filename_ != "" ) {
-                        std::ofstream OutFile;
-                        OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
-   		                OutFile << "reloc_result: "<<res<<std::endl;
-                        OutFile.close();
-                    }
                     // Mihai: Might want to add a reset function to feed the pose?
                     if(!res && config_lifelong->gt_available)
                     {
-                        if (config_lifelong->output_filename_ != "" ) {
-                            std::ofstream OutFile;
-                            OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
-   		                    OutFile << "aided_reloc: "<<1<<std::endl;
-                            OutFile.close();
-                        }
+                        config_lifelong->aided_reloc = true;
                         //Find the nearest one
                         auto gt_frames = dynamic_cast<slambench::io::GTBufferingFrameStream*>(config_lifelong->input_stream_)->GetGTFrames();
                         int index = 0;
@@ -324,13 +315,6 @@ void SLAMBenchConfigurationLifelong::compute_loop_algorithm(SLAMBenchConfigurati
                         dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
                         memcpy(gt_frame->GetData(), gt.data(), gt_frame->GetSize());
                         dynamic_cast<slambench::io::DeserialisedFrame*>(gt_frame)->getFrameBuffer().resetLock();
-                    } else {
-                        if (config_lifelong->output_filename_ != "" ) {
-                            std::ofstream OutFile;
-                            OutFile.open(config_lifelong->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
-   		                    OutFile << "aided_reloc: "<<0<<std::endl;
-                            OutFile.close();
-                        }
                     }
                 }
 
@@ -422,10 +406,80 @@ void SLAMBenchConfigurationLifelong::LoadNextInputInterface() {
     input_interface_updated = true;
 }
 
+// ---- get cpu info ---- //
+void getCPUInfo(std::string& cpuInfo)
+{
+    std::string::size_type position;
+    FILE *fp = fopen("/proc/cpuinfo", "r");
+    if(NULL == fp)
+        std::cerr << "failed to open cpuinfo\n";
+    char szTest[1000] = {0};
+    while(!feof(fp))
+    {
+        memset(szTest, 0, sizeof(szTest));
+        fgets(szTest, sizeof(szTest) - 1, fp);
+        cpuInfo = szTest;
+        position = cpuInfo.find("model name");
+        if (position != cpuInfo.npos && position == 0) {
+            position = cpuInfo.find(":");
+            cpuInfo = cpuInfo.substr(position + 1, 100);
+            position = cpuInfo.find("\n");
+            if (position != cpuInfo.npos) {
+                cpuInfo = cpuInfo.substr(0, position);
+            }
+            break;
+        }
+    }
+    fclose(fp);
+}
+
+
+// ---- get memory info ---- //
+void getMemoryInfo(int& mem)
+{
+    std::string memInfo;
+    std::string::size_type position;
+    FILE *fp = fopen("/proc/meminfo", "r");
+    if(NULL == fp)
+        std::cerr << "failed to open meminfo\n";
+    char szTest[1000] = {0};
+    while(!feof(fp))
+    {
+        memset(szTest, 0, sizeof(szTest));
+        fgets(szTest, sizeof(szTest) - 1, fp);
+        memInfo = szTest;
+        position = memInfo.find("MemTotal");
+        if (position != memInfo.npos && position == 0) {
+            position = memInfo.find(":");
+            memInfo = memInfo.substr(position + 1, 100);
+            position = 0;
+            for(size_t i = 0; i < memInfo.size(); i++) {
+                if (int(memInfo[i]) >= 48 && int(memInfo[i]) <= 57) {
+                    break;
+                }
+                position++;
+            }
+            memInfo = memInfo.substr(position, 100);
+            position = 0;
+            for(size_t i = 0; i < memInfo.size(); i++) {
+                if (int(memInfo[i]) < 48 || int(memInfo[i]) > 57) {
+                    break;
+                }
+                position++;
+            }
+            memInfo = memInfo.substr(0, position);
+            mem = std::stoi(memInfo);
+            break;
+        }
+    }
+    fclose(fp);
+}
+
 void SLAMBenchConfigurationLifelong::init_cw() {
 
     if (cw_initialised_) { 
         this->OutputToTxt();
+        aided_reloc = false;
         // delete memory_metric;
 		// delete duration_metric;
 		// delete power_metric;
@@ -450,6 +504,7 @@ void SLAMBenchConfigurationLifelong::init_cw() {
 	cw->AddColumn(&(this->row_number));
     bool have_timestamp = false;
     slambench::metrics::MemoryMetric* memory_metric = new slambench::metrics::MemoryMetric();
+    gpuInfo = memory_metric->cuda_monitor.IsActive() ? memory_metric->cuda_monitor.device_name : "";
     if (!cw_initialised_) {
 	    duration_metric = new slambench::metrics::DurationMetric();
 	    power_metric    = new slambench::metrics::PowerMetric();
@@ -545,24 +600,32 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
     scene = scene.substr(0, found2);
 
     if (this->count == 0) {
+        std::string cpuInfo;
+        int memInfo;
+        getCPUInfo(cpuInfo);
+        getMemoryInfo(memInfo);
         for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
             std::ofstream OutFile;
 		    OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::out);
             OutFile << "scene: " << scene << std::endl;
-            OutFile << "slam: " <<  lib->get_library_name() <<std::endl;
+            OutFile << "algorithm: " <<  lib->get_library_name() <<std::endl;
+            OutFile << "topics: " << std::endl;
             OutFile << "frame: " << std::endl;
-            OutFile << "topic: " << std::endl;
+            OutFile << "CPU: " << cpuInfo << std::endl;
+            OutFile << "GPU: " << gpuInfo << std::endl;
+            OutFile << "memory: " << memInfo / 1024 / 1024 << " GB"<< std::endl << std::endl;
             OutFile.close();
         }
     }
 	float x, y, z;
 	Eigen::Matrix3d R;
-	//struct timeval tv;
+	struct timeval tv;
 	for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
 	    std::ofstream OutFile;
 		OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
-        OutFile << std::endl << "seq: " << seq <<std::endl;
-   		OutFile << "#DatasetTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;	
+        OutFile <<  "seq: " << seq <<std::endl;
+        OutFile << "aided_reloc: " << aided_reloc << std::endl;
+   		//OutFile << "#DatasetTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;
 		auto output = lib->GetOutputManager().GetOutput("Pose")->GetValues();
         auto it = output.begin();
         auto pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
@@ -581,8 +644,8 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
 			    }
 			    Eigen::Quaterniond q = Eigen::Quaterniond(R);
     		    q.normalize();
-			    //gettimeofday(&tv,NULL); 
-			    OutFile<<it->first<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
+			    gettimeofday(&tv,NULL);
+			    OutFile<<it->first<<" "<<tv.tv_sec<<"."<<tv.tv_usec<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
                 pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
             }
 		}
