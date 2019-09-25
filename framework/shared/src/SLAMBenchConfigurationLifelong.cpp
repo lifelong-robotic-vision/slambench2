@@ -45,7 +45,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <nvml.h>
 
 #include <dlfcn.h>
 #define LOAD_FUNC2HELPER(handle,lib,f)     *(void**)(& lib->f) = dlsym(handle,#f); const char *dlsym_error_##lib##f = dlerror(); if (dlsym_error_##lib##f) {std::cerr << "Cannot load symbol " << #f << dlsym_error_##lib##f << std::endl; dlclose(handle); exit(1);}
@@ -619,7 +618,7 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
     }
 	float x, y, z;
 	Eigen::Matrix3d R;
-	struct timeval tv;
+//	struct timeval tv;
 	for(SLAMBenchLibraryHelper *lib : this->GetLoadedLibs()) {
 	    std::ofstream OutFile;
 		OutFile.open(this->output_filename_ + "_" + lib->get_library_name() + ".txt", std::ios::app);
@@ -627,9 +626,11 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
         OutFile << "aided_reloc: " << aided_reloc << std::endl;
    		//OutFile << "#DatasetTimestamp, position.x, y, z, quaterniond.x, y, z, w"<<std::endl;
 		auto output = lib->GetOutputManager().GetOutput("Pose")->GetValues();
+		auto duration = lib->GetMetricManager().getDuration();
+		auto du = duration.begin();
         auto it = output.begin();
         auto pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
-		for (; it != output.end(); ++it ) {
+		for (; it != output.end(); ++it, ++du ) {
             if (pose_previous != (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()||it == output.begin()){
 			    x = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue()(0, 3);
                 if (std::to_string(x) == "-nan") {
@@ -644,8 +645,8 @@ void SLAMBenchConfigurationLifelong::OutputToTxt()
 			    }
 			    Eigen::Quaterniond q = Eigen::Quaterniond(R);
     		    q.normalize();
-			    gettimeofday(&tv,NULL);
-			    OutFile<<it->first<<" "<<tv.tv_sec<<"."<<tv.tv_usec<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
+//			    gettimeofday(&tv,NULL);
+			    OutFile<<it->first<<" "<<*du<<" "<<x<<" "<<y<<" "<<z<<" "<<q.x()<<" "<<q.y()<<" "<<q.z()<<" "<<q.w()<<std::endl;
                 pose_previous = (dynamic_cast<const slambench::values::PoseValue*>(it->second))->GetValue();
             }
 		}

@@ -86,6 +86,10 @@ namespace slambench {
 				// phases_.clear();
 			}
 
+            std::vector<double>& getDuration() {
+			    return frame_phase_duration;
+			}
+
 		private:
 			metric_list_t frame_metrics_;
 			metric_list_t phase_metrics_;
@@ -99,6 +103,9 @@ namespace slambench {
 			Phase frame_phase_;
 			
 			uint64_t frame_counter_;
+
+			char duration_metric_typeid[100];
+            std::vector<double> frame_phase_duration;
 		};
 	}
 }
