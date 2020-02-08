@@ -13,41 +13,21 @@ In order to run your algorithm in SLAMBench successfully with OpenLORIS dataset,
 The setup procedure remains the same. For more detailed information about SLAMBench2, please refer to the original part, starting from **README**.
 
 ## Dataset Transformation ##
-This OpenLORIS-Scene Dataset is now supported in SLAMBench2. After download the dataset, please put it as follows:
+This OpenLORIS-Scene Dataset is now supported in SLAMBench2, but the data need to be download manually. After downloading the package data, please put the tar files into datasets/OpenLORIS, and build all data sequences of one scene with e.g.
+
 ```
-SLAMBench2
-│   README.md
-│   Makefile
-│   ...
-└───datasets
-│   │
-│   └───OpenLORIS
-│   │      └───office-1
-│   │             └───office-1-1
-│   │             └───office-1-2
-│   │             └───office-1-3
-│   │             └───office-1-4
-│   │             └───office-1-5
-│   │             └───office-1-6
-│   │             └───office-1-7
-│   └───...
-└───...
+make ./datasets/OpenLORIS/office1.all
 ```
 
-You can transfer one subfolder e.g.```./datasets/OpenLORIS/office-1/office-1-1``` to the format ```*.slam``` by running:
-```
-make ./datasets/OpenLORIS/office-1/office-1-1.slam
-```
+Or just one sequence, e.g.
 
-Or more directly you can transfer all subfolders of ```./datasets/OpenLORIS/office-1``` to the format ```*.slam``` by simply running:
 ```
-make OpenLORIS-office-1
+make ./datasets/OpenLORIS/office1/office1-1.slam
 ```
-Before running this command please make sure the directory ```./datasets/OpenLORIS/office-1``` is clean, contenting only subfolders of  OpenLORIS-Scene Dataset.
 
 In  OpenLORIS-Scene dataset transformation, 12 parameters are set to decide which sensors to be included, and the default value is ```true```. If you want only part of the sensors, e.g. rgbd and ground-truth, you can run:
 ```
-./build/bin/dataset-generator -d OpenLORIS -i ./datasets/OpenLORIS/office-1/office-1-1/ -o ./datasets/OpenLORIS/office-1/office-1-1_rgbd.slam -color true -aligned_depth true -grey false -depth false -d400_accel false -d400_gyro false -fisheye1 false -fisheye2 false -t265_accel false -t265_gyro false -odom false -gt true
+./build/bin/dataset-generator -d OpenLORIS -i ./datasets/OpenLORIS/office1/office1-1/ -o ./datasets/OpenLORIS/office1/office1-1_rgbd.slam -color true -aligned_depth true -grey false -depth false -d400_accel false -d400_gyro false -fisheye1 false -fisheye2 false -t265_accel false -t265_gyro false -odom false -gt true
 ```
 At least one camera-type sensor must be choosed.
 
